@@ -1,0 +1,978 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>A TISZA kormány teljesítménye 2026-2030 között a kelet-közép-európai országok viszonylatában</title>
+  <meta property="og:title" content="A TISZA kormány teljesítménye 2026-2030 között a kelet-közép-európai országok viszonylatában" />
+  <meta property="og:description" content="Interaktív adatvizualizáció: hogyan teljesít Magyarország 11 kelet-közép-európai ország viszonylatában 2026 és 2030 között?" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://gydeak.github.io/tisza2026-30/" />
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="A TISZA kormány teljesítménye 2026-2030 között a kelet-közép-európai országok viszonylatában" />
+  <meta name="twitter:description" content="Interaktív adatvizualizáció: hogyan teljesít Magyarország 11 kelet-közép-európai ország viszonylatában 2026 és 2030 között?" />
+  <meta property="og:image" content="https://gydeak.github.io/tisza2026-30/preview.png" />
+  <meta name="twitter:image" content="https://gydeak.github.io/tisza2026-30/preview.png" />
+    <!-- Google Analytics -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-8KWS6F1E7N"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-8KWS6F1E7N');
+  </script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #0b1426; color: #e2e8f0; font-family: 'Segoe UI', sans-serif; }
+    ::-webkit-scrollbar { height: 6px; width: 6px; }
+    ::-webkit-scrollbar-track { background: #0b1426; }
+    ::-webkit-scrollbar-thumb { background: #1e3a5f; border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useCallback } = React;
+
+    const COUNTRIES = ["BG", "CZ", "EE", "HR", "PL", "LV", "LT", "HU", "RO", "SK", "SI"];
+    const COUNTRY_NAMES = {
+      BG: "Bulgária", CZ: "Csehország", EE: "Észtország", HR: "Horvátország",
+      PL: "Lengyelország", LV: "Lettország", LT: "Litvánia", HU: "Magyarország",
+      RO: "Románia", SK: "Szlovákia", SI: "Szlovénia"
+    };
+
+    const DATASETS = [
+      { id: "demo_mlexpec",   label: "Várható élettartam",  method: "diff",  goodDirection: +1, params: { freq: "A", unit: "YR", sex: "T", age: "Y_LT1" },                                               from: "2026",    to: "2030"    },
+      { id: "ilc_di03",       label: "Mediánjövedelem",     method: "ratio", goodDirection: +1, params: { freq: "A", age: "TOTAL", sex: "T", indic_il: "MED_E", unit: "PPS" },                             from: "2026",    to: "2030"    },
+      { id: "nama_10_gdp",       label: "Munkajövedelem",     method: "ratio", goodDirection: +1, params: { freq: "A", unit: "PC_GDP", na_item: "D1" },                             from: "2026",    to: "2030"    },
+      // GDP: negyedéves volumenindex (2020=100, NSA), gördülő 4Q átlag — logikailag azonos az inflációs indexszel
+      { id: "namq_10_pc", label: "GDP", method: "ratio", goodDirection: +1,
+        params: { freq: "Q", unit: "CLV_I20_HAB", s_adj: "NSA", na_item: "B1GQ" },
+        from: "2025-Q3", to: "2030-Q2",
+        rollingAvg4Q: true, rollingFrom: "2026-Q2" },
+      { id: "env_ac_aigg_q",  label: "Üvegházhatású gáz",          method: "ratio", goodDirection: -1, params: { freq: "Q", s_adj: "SA", nace_r2: "TOTAL_HH", airpol: "GHG", unit: "T_HAB" },                    from: "2026-Q2", to: "2030-Q2" },
+      { id: "demo_find",      label: "Termékenység",         method: "ratio", goodDirection: +1, params: { freq: "A", indic_de: "TOTFERRT" },                                                               from: "2026",    to: "2030"    },
+      { id: "demo_fabortind",      label: "Abortuszok",         method: "ratio", goodDirection: -1, params: { freq: "A", indic_de: "ABRATIO", unit: "RT" },                                                               from: "2026",    to: "2030"    },
+      { id: "lfsi_emp_q",     label: "Foglalkoztatás",       method: "ratio", goodDirection: +1, params: { freq: "Q", indic_em: "ACT", s_adj: "NSA", sex: "T", age: "Y15-74", unit: "PC_POP" },            from: "2026-Q2", to: "2030-Q2" },
+      { id: "gov_10q_ggdebt", label: "Államadósság",         method: "ratio", goodDirection: -1, params: { freq: "Q", na_item: "GD", sector: "S13", unit: "PC_GDP" },                                      from: "2026-Q2", to: "2030-Q2" },
+      { id: "gov_10dd_edpt1", label: "Kamatfizetés",         method: "diff",  goodDirection: -1, params: { freq: "A", unit: "PC_GDP", sector: "S13", na_item: "D41PAY" },                                  from: "2026",    to: "2030"    },
+      { id: "ilc_di12",       label: "Jövedelmi egyenlőség",                 method: "ratio", goodDirection: -1, params: { freq: "A", age: "TOTAL", statinfo: "GINI_HND" },                                                from: "2026",    to: "2030"    },
+      { id: "nasa_10_f_bs",   label: "Háztartások pénzügyi vagyona",         method: "ratio", goodDirection: +1, params: { freq: "A", unit: "PC_GDP", co_nco: "NCO", sector: "S14_S15", finpos: "LIAB", na_item: "BF90" }, from: "2026",    to: "2030"    },
+      { id: "ilc_lvho02",   label: "Saját ingatlan",         method: "ratio", goodDirection: +1, params: { freq: "A", incgrp: "TOTAL", hhtyp: "TOTAL", tenure: "OWN", unit: "PC" }, from: "2026",    to: "2030"    },
+      { id: "prc_hicp_minr",  label: "Infláció",      method: "ratio", goodDirection: -1, params: { freq: "M", unit: "I25", coicop18: "TOTAL" },                                                       from: "2026-04", to: "2030-04" },
+      { id: "prc_hpi_q",      label: "Lakásárak",            method: "ratio", goodDirection: -1, params: { freq: "Q", purchase: "TOTAL", unit: "I10_Q" },                                                  from: "2026-Q2", to: "2030-Q2" },
+      { id: "crim_off_cat",   label: "Gyilkosságok",              method: "ratio", goodDirection: -1, params: { freq: "A", iccs: "ICCS0101", unit: "P_HTHAB" },                                                      from: "2026",    to: "2030"    },
+      { id: "demo_nind",   label: "Házasságok",              method: "ratio", goodDirection: +1, params: { freq: "A", indic_de: "GNUPRT" },                                                 from: "2026",    to: "2030"    },
+      { id: "demo_ndivind",   label: "Válások",              method: "ratio", goodDirection: -1, params: { freq: "A", indic_de: "DIVMARPCT" },                                                      from: "2026",    to: "2030"    },
+      { id: "ilc_lvph01",   label: "Háztartásnagyság",              method: "ratio", goodDirection: +1, params: { freq: "A", unit: "AVG" },                                                      from: "2026",    to: "2030"    },
+      { id: "rd_e_gerdtot",   label: "Kutatás fejlesztés",       method: "diff",  goodDirection: +1, params: { freq: "A", sectperf: "TOTAL", unit: "PC_GDP" },                                                 from: "2026",    to: "2030"    },
+      { id: "ilc_peps01n_tot", label: "Szegénység",            method: "ratio", goodDirection: -1, params: { freq: "A", unit: "PC", age: "TOTAL",  sex: "T" },                                                 from: "2026",    to: "2030",    dsOverride: "ilc_peps01n" },
+      { id: "ilc_peps01n_ylt", label: "Gyermekszegénység",     method: "ratio", goodDirection: -1, params: { freq: "A", unit: "PC", age: "Y_LT18", sex: "T" },                                                 from: "2026",    to: "2030",    dsOverride: "ilc_peps01n" },
+      { id: "ilc_peps01n_old", label: "Idős szegénység",       method: "ratio", goodDirection: -1, params: { freq: "A", unit: "PC", age: "Y_GE65", sex: "T" },                                                 from: "2026",    to: "2030",    dsOverride: "ilc_peps01n" },
+      { id: "crim_off_cat_lop", label: "Lopások",               method: "ratio", goodDirection: -1, params: { freq: "A", iccs: "ICCS0502", unit: "P_HTHAB" },                                                         from: "2026",    to: "2030",    dsOverride: "crim_off_cat" },
+      { id: "hlth_cd_asdr2_sui", label: "Öngyilkosságok",          method: "ratio", goodDirection: -1, params: { freq: "A", unit: "RT", sex: "T", age: "TOTAL", icd10: "X60-X84_Y870" },                          from: "2026",    to: "2030",    dsOverride: "hlth_cd_asdr2" },
+      { id: "gov_10a_exp_hlth",    label: "Egészségügyi kiadás",        method: "ratio", goodDirection: +1, params: { freq: "A", unit: "PC_GDP", sector: "S13", cofog99: "GF07", na_item: "TE" },                        from: "2026",    to: "2030",    dsOverride: "gov_10a_exp" },
+      { id: "gov_10a_exp_edu",    label: "Oktatási kiadás",        method: "ratio", goodDirection: +1, params: { freq: "A", unit: "PC_GDP", sector: "S13", cofog99: "GF09", na_item: "TE" },                        from: "2026",    to: "2030",    dsOverride: "gov_10a_exp" },
+      { id: "gov_10a_exp_def",    label: "Védelmi kiadás",         method: "ratio", goodDirection: +1, params: { freq: "A", unit: "PC_GDP", sector: "S13", cofog99: "GF02", na_item: "TE" },                        from: "2026",    to: "2030",    dsOverride: "gov_10a_exp" },
+      // Nyugdíj: derived = spr_exp_pens / spr_pns_ben (egy főre jutó kiadás)
+      { id: "spr_exp_pens",     label: "Nyugdíjkiadás (PPS)",     method: "ratio", goodDirection: +1, params: { freq: "A", spdepb: "OLD", spdepm: "TOTAL", unit: "MIO_PPS" }, from: "2026", to: "2030", hidden: true },
+      { id: "spr_pns_ben",       label: "Nyugdíjasok száma",        method: "ratio", goodDirection: +1, params: { freq: "A", spdepm: "TOTAL", spscheme: "TOTAL", spdepb: "OLD", sex: "T", unit: "PER" }, from: "2026", to: "2030", hidden: true },
+      { id: "nyugdij_egy_fore",  label: "Átlagnyugdíj",    method: "ratio", goodDirection: +1, params: null, from: "2026", to: "2030", derived: ["spr_exp_pens", "spr_pns_ben"] },
+      // Császármetszések aránya: derived = hlth_co_proc3 (CM74_CAE) / demo_gind (LBIRTH) * 100
+      { id: "hlth_co_proc3_cs",  label: "Császármetszések száma",  method: "ratio", goodDirection: -1,
+        params: { freq: "A", icha_hc: "TOT_PAT", unit: "NR", icd9cm: "CM74_CAE" },
+        from: "2026", to: "2030", hidden: true, useTsv: true, dsOverride: "hlth_co_proc3" },
+      { id: "demo_gind_lb",      label: "Élveszületések száma",    method: "ratio", goodDirection: +1,
+        params: { freq: "A", indic_de: "LBIRTH" },
+        from: "2026", to: "2030", hidden: true, dsOverride: "demo_gind" },
+      { id: "csaszarmetszesek",  label: "Császármetszések aránya", method: "ratio", goodDirection: -1,
+        params: null, from: "2026", to: "2030",
+        derived: ["hlth_co_proc3_cs", "demo_gind_lb"], derivedOp: "ratio_pct" },
+
+      // ── Külföldi tőke súlya ────────────────────────────────────────────────
+      // Számláló (külföldi vállalatok hozzáadott értéke)
+      { id: "fats_va_new", label: "Külföldi vállalatok értéke 2026-2030", method: "ratio", goodDirection: +1,
+        params: { freq: "A", nace_r2: "B-S_X_O_S94", indic_sbs: "AV_MEUR", c_ctrl: "WRL_REST" },
+        from: "2026", to: "2030", hidden: true, dsOverride: "fats_activ" },
+      // Nevező (összes vállalat hozzáadott értéke)
+      { id: "sbs_va_new", label: "Összes vállalat értéke 2026-2030", method: "ratio", goodDirection: +1,
+        params: { freq: "A", indic_sbs: "AV_MEUR", nace_r2: "B-S_X_O_S94", size_emp: "TOTAL" },
+        from: "2026", to: "2030", hidden: true, dsOverride: "sbs_sc_ovw" },
+      // Derived: arány (külföldi VA / összes VA × 100)
+      { id: "kulfoldi_vallalatok", label: "Külföldi vállalatok gazdasági súlya", method: "ratio", goodDirection: -1,
+        params: null, from: "2026", to: "2030",
+        derived: ["fats_va_new", "sbs_va_new"],
+        derivedOp: "concat_ratio" },
+
+      // ── Külföldi tőke munkaerőpiaci súlya ─────────────────────────────────
+      // Számláló (külföldi vállalatok foglalkoztatottjai)
+      { id: "fats_emp_new", label: "Külföldi vállalatok foglalkoztatottjai 2026-2030", method: "ratio", goodDirection: +1,
+        params: { freq: "A", nace_r2: "B-S_X_O_S94", indic_sbs: "EMP_NR", c_ctrl: "WRL_REST" },
+        from: "2026", to: "2030", hidden: true, dsOverride: "fats_activ" },
+      // Nevező (összes vállalat foglalkoztatottjai)
+      { id: "sbs_emp_new", label: "Összes vállalat foglalkoztatottjai 2026-2030", method: "ratio", goodDirection: +1,
+        params: { freq: "A", indic_sbs: "EMP_NR", nace_r2: "B-S_X_O_S94", size_emp: "TOTAL" },
+        from: "2026", to: "2030", hidden: true, dsOverride: "sbs_sc_ovw" },
+      // Derived: arány (külföldi EMP / összes EMP × 100)
+      { id: "kulfoldi_munkaero", label: "Külföldi tőke munkaerőpiaci súlya", method: "ratio", goodDirection: -1,
+        params: null, from: "2026", to: "2030",
+        derived: ["fats_emp_new", "sbs_emp_new"],
+        derivedOp: "concat_ratio" },
+
+      // ── Folyó fizetési mérleg (4 negyedéves gördülő átlag) ─────────────────
+      { id: "bop_gdp6_q", label: "Folyó fizetési mérleg", method: "diff", goodDirection: +1,
+        params: { freq: "Q", unit: "PC_GDP", s_adj: "NSA", bop_item: "CA",
+                  stk_flow: "BAL", partner: "WRL_REST" },
+        from: "2025-Q3", to: "2030-Q2",
+        rollingAvg4Q: true, rollingFrom: "2026-Q2" },
+
+      // ── Államháztartási egyenleg (4 negyedéves gördülő átlag) ────────────
+      // B9 = nettó hitelezési kapacitás: pozitív = többlet, negatív = hiány
+      { id: "gov_10q_ggnfa", label: "Államháztartási egyenleg", method: "diff", goodDirection: +1,
+        params: { freq: "Q", unit: "PC_GDP", s_adj: "NSA", sector: "S13", na_item: "B9" },
+        from: "2025-Q3", to: "2030-Q2",
+        rollingAvg4Q: true, rollingFrom: "2026-Q2" },
+    ];
+
+    async function fetchDataset(ds) {
+      const geoParams = COUNTRIES.map(c => `geo=${c}`).join("&");
+      const dimParams = Object.entries(ds.params).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join("&");
+      const dsId = ds.dsOverride || ds.id;
+      const url = `https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/${dsId}?format=JSON&lang=EN&${dimParams}&${geoParams}&sinceTimePeriod=${encodeURIComponent(ds.from)}&untilTimePeriod=${encodeURIComponent(ds.to)}`;
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      return resp.json();
+    }
+
+    async function fetchAndParseTsv(ds) {
+      const geoList = COUNTRIES.join(",");
+      const dimParams = Object.entries(ds.params).map(([k,v]) => `c[${k}]=${encodeURIComponent(v)}`).join("&");
+      const dsId = ds.dsOverride || ds.id;
+      const url = `https://ec.europa.eu/eurostat/api/dissemination/sdmx/3.0/data/dataflow/ESTAT/${dsId}/1.0/*?${dimParams}&c[geo]=${geoList}&c[TIME_PERIOD]=ge:${ds.from}+le:${ds.to}&compress=false&format=tsv`;
+    
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const text = await resp.text();
+      const lines = text.split("\n");
+      if (lines.length < 2) throw new Error("Üres TSV");
+
+      const headerDims = lines[0].split("\t")[0].split(",").map(d => d.trim().toLowerCase());
+      const geoPos = headerDims.indexOf("geo");
+      if (geoPos === -1) throw new Error("Geo dimenzió nem található a TSV headerben");
+
+      const dates = lines[0].split("\t").slice(1).map(d => d.trim()).filter(Boolean);
+      const result = {};
+
+      for (let i = 1; i < lines.length; i++) {
+        if (!lines[i].trim()) continue;
+        const cols = lines[i].split("\t");
+        const rowKeyParts = cols[0].split(",").map(p => p.trim().toUpperCase());
+        const geo = rowKeyParts[geoPos];
+        if (!COUNTRIES.includes(geo)) continue;
+
+        result[geo] = {};
+        for (let j = 1; j < cols.length && j <= dates.length; j++) {
+          const v = parseFloat(cols[j].trim().replace(/[^\d.-]/g, ""));
+          if (!isNaN(v)) result[geo][dates[j-1]] = v;
+        }
+      }
+      return result;
+    }
+
+    function parseEurostatJSON(data) {
+      const dims = data.id || [];
+      const sizes = data.size || [];
+      const values = data.value || {};
+      const geoPos = dims.indexOf("geo");
+      const timePos = dims.indexOf("time");
+      if (geoPos < 0 || timePos < 0) return {};
+      const geoCatIdx = data.dimension?.geo?.category?.index || {};
+      const timeCatIdx = data.dimension?.time?.category?.index || {};
+      const strides = new Array(dims.length).fill(1);
+      for (let i = dims.length - 2; i >= 0; i--) strides[i] = strides[i + 1] * sizes[i + 1];
+      const totalSize = sizes.reduce((a, b) => a * b, 1);
+      const result = {};
+      for (const country of COUNTRIES) {
+        const geoIdx = geoCatIdx[country];
+        if (geoIdx === undefined) continue;
+        result[country] = {};
+        for (const [timePeriod, timeIdx] of Object.entries(timeCatIdx)) {
+          for (let flatIdx = 0; flatIdx < totalSize; flatIdx++) {
+            const gI = Math.floor(flatIdx / strides[geoPos]) % sizes[geoPos];
+            const tI = Math.floor(flatIdx / strides[timePos]) % sizes[timePos];
+            if (gI === geoIdx && tI === timeIdx) {
+              const v = values[flatIdx];
+              if (v !== null && v !== undefined) { result[country][timePeriod] = v; break; }
+            }
+          }
+        }
+      }
+      return result;
+    }
+
+    async function fetchSdmx3Tsv(ds) {
+      const result = {};
+      try {
+        const dimParams = Object.entries(ds.sdmxDims).map(([k,v]) => `c[${k}]=${encodeURIComponent(v)}`).join("&");
+        const geoList = COUNTRIES.join(",");
+        const url = `https://ec.europa.eu/eurostat/api/dissemination/sdmx/3.0/data/dataflow/ESTAT/${ds.sdmxDs}/1.0/*?${dimParams}&c[geo]=${geoList}&c[TIME_PERIOD]=ge:${ds.from}+le:${ds.to}&compress=false&format=tsv`;
+        console.log("fetchSdmx3Tsv URL:", url);
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const text = await resp.text();
+        const lines = text.split("\n");
+        if (lines.length < 2) throw new Error("Üres TSV válasz");
+        const dates = lines[0].split("\t").slice(1).map(d => d.trim()).filter(d => d);
+        console.log("fetchSdmx3Tsv dates:", dates.slice(0,5), "rows:", lines.length);
+        for (let i = 1; i < lines.length; i++) {
+          if (!lines[i].trim()) continue;
+          const cols = lines[i].split("\t");
+          const rowKey = cols[0].toUpperCase();
+          const country = COUNTRIES.find(c => {
+            const parts = rowKey.split(",");
+            return parts[parts.length - 1].trim() === c;
+          });
+          if (!country) continue;
+          result[country] = {};
+          for (let j = 1; j < cols.length && j <= dates.length; j++) {
+            const v = parseFloat(cols[j].trim().replace(/[^\d.-]/g, ""));
+            if (!isNaN(v) && dates[j-1]) result[country][dates[j-1]] = v;
+          }
+        }
+        console.log("fetchSdmx3Tsv result countries:", Object.keys(result));
+      } catch(e) {
+        console.error("fetchSdmx3Tsv error:", ds.id, e);
+      }
+      return result;
+    }
+
+    function parseSdmx3JSON(data) {
+      try {
+        const struct = data.data.structure.dimensions.observation;
+        const dimMap = {};
+        struct.forEach((dim, i) => { dimMap[dim.id] = i; });
+        const geoPos = dimMap["geo"] ?? dimMap["GEO"];
+        const timePos = dimMap["TIME_PERIOD"] ?? dimMap["time"];
+        if (geoPos === undefined || timePos === undefined) return {};
+        const geoValues = struct[geoPos].values;
+        const timeValues = struct[timePos].values;
+        const obs = data.data.dataSets[0].observations;
+        const result = {};
+        for (const [key, valArr] of Object.entries(obs)) {
+          const parts = key.split(":");
+          const geoIdx = parseInt(parts[geoPos]);
+          const timeIdx = parseInt(parts[timePos]);
+          const geoCode = geoValues[geoIdx]?.id;
+          const timePeriod = timeValues[timeIdx]?.id;
+          const val = valArr[0];
+          if (!COUNTRIES.includes(geoCode)) continue;
+          if (val === null || val === undefined) continue;
+          if (!result[geoCode]) result[geoCode] = {};
+          result[geoCode][timePeriod] = val;
+        }
+        return result;
+      } catch(e) {
+        console.error("parseSdmx3JSON error:", e);
+        return {};
+      }
+    }
+
+    // Negyedév-kulcs segédfüggvények (pl. "2026-Q2" → sorszám, vissza)
+    function qToNum(q) {
+      const [y, qt] = q.split("-Q");
+      return parseInt(y) * 4 + parseInt(qt) - 1;
+    }
+    function numToQ(n) {
+      const y = Math.floor(n / 4);
+      const qt = (n % 4) + 1;
+      return `${y}-Q${qt}`;
+    }
+
+    // Gördülő 4 negyedéves átlag alkalmazása.
+    // Minden t időpontra: smoothed[c][t] = átlag(t, t-1, t-2, t-3) — csak ha mind a 4 rendelkezésre áll
+    // Csak a rollingFrom-nál nem korábbi t időpontokat tartja meg.
+    function applyRollingAvg4Q(parsed, rollingFrom) {
+      const fromNum = qToNum(rollingFrom);
+      const result = {};
+      for (const c of COUNTRIES) {
+        if (!parsed[c]) continue;
+        result[c] = {};
+        const allQ = Object.keys(parsed[c]).sort();
+        for (const q of allQ) {
+          const n = qToNum(q);
+          if (n < fromNum) continue;
+          const vals = [0, 1, 2, 3].map(i => parsed[c][numToQ(n - i)]).filter(v => v != null);
+          if (vals.length === 4) result[c][q] = vals.reduce((a, b) => a + b, 0) / 4;
+        }
+        if (Object.keys(result[c]).length === 0) delete result[c];
+      }
+      return result;
+    }
+
+    function computeAllScores(parsedByCountry, method, goodDirection) {
+      const allTimes = new Set();
+      for (const c of COUNTRIES) {
+        if (parsedByCountry[c]) Object.keys(parsedByCountry[c]).forEach(t => allTimes.add(t));
+      }
+      const commonTimes = Array.from(allTimes).sort().filter(t =>
+        COUNTRIES.every(c => parsedByCountry[c]?.[t] != null)
+      );
+      if (commonTimes.length < 2) return {};
+      const firstTime = commonTimes[0];
+      const lastTime  = commonTimes[commonTimes.length - 1];
+      const firstVals = COUNTRIES.map(c => parsedByCountry[c][firstTime]);
+      const lastVals  = COUNTRIES.map(c => parsedByCountry[c][lastTime]);
+      const firstAvg = firstVals.reduce((a, b) => a + b, 0) / firstVals.length;
+      const lastAvg  = lastVals.reduce((a, b) => a + b, 0) / lastVals.length;
+      if (firstAvg === 0 || lastAvg === 0) return {};
+      const scores = {};
+      for (const c of COUNTRIES) {
+        const fv = parsedByCountry[c][firstTime];
+        const lv = parsedByCountry[c][lastTime];
+        const score = method === "ratio"
+          ? (lv / lastAvg) - (fv / firstAvg)
+          : (lv - lastAvg) - (fv - firstAvg);
+        scores[c] = goodDirection === +1 ? score : -score;
+      }
+      return scores;
+    }
+
+    function rankCountries(scores) {
+      const valid = Object.entries(scores).filter(([, v]) => v !== null && !isNaN(v));
+      valid.sort((a, b) => b[1] - a[1]);
+      const ranks = {};
+      valid.forEach(([c], i) => { ranks[c] = i + 1; });
+      COUNTRIES.forEach(c => { if (!(c in ranks)) ranks[c] = null; });
+      return ranks;
+    }
+
+    function getRankColor(rank) {
+      if (rank == null) return "#111827";
+      const t = (rank - 1) / 10;
+      const r = t < 0.5 ? Math.round(22 + (t * 2) * (234 - 22)) : Math.round(234 + ((t - 0.5) * 2) * (185 - 234));
+      const g = t < 0.5 ? Math.round(163 - (t * 2) * (163 - 179)) : Math.round(179 - ((t - 0.5) * 2) * (179 - 28));
+      const b = t < 0.5 ? Math.round(74 - (t * 2) * (74 - 7)) : 7;
+      return `rgb(${r},${g},${b})`;
+    }
+
+    const GROUPS = DATASETS.filter(ds => !ds.hidden).map(ds => ({ key: ds.id, label: ds.label, ids: [ds.id] }));
+
+    const INDEX_ONLY_IDS = new Set(["prc_hicp_minr", "prc_hpi_q", "namq_10_pc"]);
+
+    function App() {
+      const [results, setResults] = useState({});
+      const [rawData, setRawData] = useState({});
+      const [loading, setLoading] = useState({});
+      const [errors, setErrors] = useState({});
+      const [selectedGroups, setSelectedGroups] = useState(() => new Set());
+      const [showDetails, setShowDetails] = useState(false);
+      const [sortByCol, setSortByCol] = useState('last');
+
+      const loadAll = useCallback(async () => {
+        const parsedCache = {};
+        for (const ds of DATASETS) {
+          setLoading(prev => ({ ...prev, [ds.id]: true }));
+          try {
+            let parsed;
+            if (ds.derivedOp === "concat_ratio") {
+              // 2 forrás: [num, den] — egyetlen időszak
+              const [numId, denId] = ds.derived;
+              const numData = parsedCache[numId];
+              const denData = parsedCache[denId];
+              if (!numData || !denData) throw new Error("Forrásadat hiányzik");
+              parsed = {};
+              for (const c of COUNTRIES) {
+                parsed[c] = {};
+                const numC = numData[c] || {};
+                const denC = denData[c] || {};
+                for (const t of Object.keys(numC)) {
+                  if (denC[t] != null && denC[t] !== 0) {
+                    parsed[c][t] = (numC[t] / denC[t]) * 100;
+                  }
+                }
+                if (Object.keys(parsed[c]).length === 0) delete parsed[c];
+              }
+            } else if (ds.derived) {
+              // Derived: számított mutató két forrásadatból
+              const [numId, denId] = ds.derived;
+              const numData = parsedCache[numId];
+              const denData = parsedCache[denId];
+              if (!numData || !denData) throw new Error("Forrásadat hiányzik");
+              parsed = {};
+              for (const c of COUNTRIES) {
+                if (!numData[c] || !denData[c]) continue;
+                parsed[c] = {};
+                for (const t of Object.keys(numData[c])) {
+                  if (denData[c][t] && denData[c][t] !== 0) {
+                    if (ds.derivedOp === "ratio_pct") {
+                      parsed[c][t] = (numData[c][t] / denData[c][t]) * 100;
+                    } else {
+                      parsed[c][t] = (numData[c][t] * 1_000_000) / denData[c][t];
+                    }
+                  }
+                }
+              }
+            } else if (ds.useTsv) {
+              parsed = await fetchAndParseTsv(ds);
+            } else {
+              const data = await fetchDataset(ds);
+              parsed = parseEurostatJSON(data);
+            }
+            parsedCache[ds.id] = parsed;
+            const countryCount = COUNTRIES.filter(c => parsed[c] && Object.keys(parsed[c]).length > 0).length;
+            if (countryCount === 0) throw new Error("Üres válasz");
+            // Gördülő 4 negyedéves átlag alkalmazása, ha szükséges
+            const scoreData = ds.rollingAvg4Q
+              ? applyRollingAvg4Q(parsed, ds.rollingFrom)
+              : parsed;
+            const scores = computeAllScores(scoreData, ds.method, ds.goodDirection);
+            setResults(prev => ({ ...prev, [ds.id]: rankCountries(scores) }));
+            // rawData-ba a simított változatot tároljuk (az abszolút táblához)
+            setRawData(prev => ({ ...prev, [ds.id]: ds.rollingAvg4Q ? scoreData : parsed }));
+          } catch (e) {
+            setErrors(prev => ({ ...prev, [ds.id]: e.message }));
+          } finally {
+            setLoading(prev => ({ ...prev, [ds.id]: false }));
+          }
+        }
+      }, []);
+
+      useEffect(() => { loadAll(); }, [loadAll]);
+
+      const loadedCount = DATASETS.filter(ds => results[ds.id] || errors[ds.id]).length;
+      const allDone = loadedCount === DATASETS.length;
+
+      const visibleIds = new Set(GROUPS.filter(g => selectedGroups.has(g.key)).flatMap(g => g.ids));
+      const visibleDatasets = DATASETS.filter(ds => visibleIds.has(ds.id));
+
+      const absDatasets = visibleDatasets.filter(ds => !INDEX_ONLY_IDS.has(ds.id));
+
+      const avgRanks = {};
+      for (const c of COUNTRIES) {
+        const ranks = visibleDatasets.map(ds => results[ds.id]?.[c]).filter(r => r != null);
+        avgRanks[c] = ranks.length > 0 ? ranks.reduce((a, b) => a + b, 0) / ranks.length : null;
+      }
+      const sorted = [...COUNTRIES].sort((a, b) => (avgRanks[a] ?? 999) - (avgRanks[b] ?? 999));
+
+      const singleDs = visibleDatasets.length === 1 ? visibleDatasets[0] : null;
+
+      const getDsCommonTimes = (ds) => {
+        const dsCountryTimes = COUNTRIES.map(c => new Set(Object.keys(rawData[ds.id]?.[c] || {})));
+        if (dsCountryTimes.some(s => s.size === 0)) return { first: null, last: null };
+        const intersection = dsCountryTimes.reduce((a, b) => new Set([...a].filter(x => b.has(x))));
+        if (intersection.size === 0) return { first: null, last: null };
+        const sorted = [...intersection].sort();
+        return { first: sorted[0], last: sorted[sorted.length - 1] };
+      };
+
+      const { first: firstTime, last: lastTime } = (() => {
+        if (visibleDatasets.length === 0) return { first: null, last: null };
+        if (singleDs) return getDsCommonTimes(singleDs);
+        if (absDatasets.length === 0) return { first: null, last: null };
+        const perDs = absDatasets.map(ds => getDsCommonTimes(ds));
+        const firsts = perDs.map(t => t.first).filter(Boolean).sort();
+        const lasts  = perDs.map(t => t.last).filter(Boolean).sort();
+        return { first: firsts[0] ?? null, last: lasts[lasts.length - 1] ?? null };
+      })();
+
+      const firstRanks = {};
+      const lastRanks = {};
+      const firstRawVals = {};
+      const lastRawVals = {};
+
+      if (singleDs) {
+        const { first: f, last: l } = getDsCommonTimes(singleDs);
+        if (f && l) {
+          for (const c of COUNTRIES) {
+            firstRawVals[c] = rawData[singleDs.id]?.[c]?.[f] ?? null;
+            lastRawVals[c] = rawData[singleDs.id]?.[c]?.[l] ?? null;
+          }
+        }
+      } else {
+        for (const ds of absDatasets) {
+          const { first: f, last: l } = getDsCommonTimes(ds);
+          if (!f || !l) continue;
+          const firstScores = {};
+          const lastScores = {};
+          for (const c of COUNTRIES) {
+            const fv = rawData[ds.id]?.[c]?.[f];
+            const lv = rawData[ds.id]?.[c]?.[l];
+            if (fv != null) firstScores[c] = ds.goodDirection === 1 ? fv : -fv;
+            if (lv != null) lastScores[c] = ds.goodDirection === 1 ? lv : -lv;
+          }
+          const fRanked = rankCountries(firstScores);
+          const lRanked = rankCountries(lastScores);
+          for (const c of COUNTRIES) {
+            if (fRanked[c] != null) firstRanks[c] = (firstRanks[c] || []).concat(fRanked[c]);
+            if (lRanked[c] != null) lastRanks[c] = (lastRanks[c] || []).concat(lRanked[c]);
+          }
+        }
+      }
+
+      const firstAvgRanks = {};
+      const lastAvgRanks = {};
+      if (!singleDs) {
+        for (const c of COUNTRIES) {
+          firstAvgRanks[c] = firstRanks[c]?.length > 0 ? firstRanks[c].reduce((a,b)=>a+b,0)/firstRanks[c].length : null;
+          lastAvgRanks[c] = lastRanks[c]?.length > 0 ? lastRanks[c].reduce((a,b)=>a+b,0)/lastRanks[c].length : null;
+        }
+      }
+
+      const sortedByLast = [...COUNTRIES].sort((a, b) => {
+        const isFirst = sortByCol === 'first';
+        const va = singleDs
+          ? ((isFirst ? firstRawVals[a] : lastRawVals[a]) ?? (singleDs.goodDirection === 1 ? -Infinity : Infinity))
+          : ((isFirst ? firstAvgRanks[a] : lastAvgRanks[a]) ?? 999);
+        const vb = singleDs
+          ? ((isFirst ? firstRawVals[b] : lastRawVals[b]) ?? (singleDs.goodDirection === 1 ? -Infinity : Infinity))
+          : ((isFirst ? firstAvgRanks[b] : lastAvgRanks[b]) ?? 999);
+        return singleDs ? (singleDs.goodDirection === 1 ? vb - va : va - vb) : va - vb;
+      });
+
+      return (
+        <div style={{ fontFamily: "'Segoe UI', sans-serif", background: "#0b1426", minHeight: "100vh", padding: "28px 16px", color: "#e2e8f0" }}>
+          <div style={{ maxWidth: 1500, margin: "0 auto" }}>
+
+            <div style={{ marginBottom: 22, textAlign: "center" }}>
+              <h1 style={{ fontSize: 20, fontWeight: 700, color: "#f8fafc", letterSpacing: 1, margin: 0, textTransform: "uppercase" }}>
+                A TISZA kormány teljesítménye 2026-2030 között a kelet-közép-európai országok viszonylatában
+              </h1>
+              {!allDone && (
+                <div style={{ marginTop: 10 }}>
+                  <div style={{ background: "#1e293b", borderRadius: 4, height: 5, width: 260, margin: "0 auto", overflow: "hidden" }}>
+                    <div style={{ background: "linear-gradient(90deg,#3b82f6,#818cf8)", height: "100%", width: `${(loadedCount / DATASETS.length) * 100}%`, transition: "width 0.4s", borderRadius: 4 }} />
+                  </div>
+                  <p style={{ color: "#475569", fontSize: 10, marginTop: 3 }}>Betöltés: {loadedCount}/{DATASETS.length}</p>
+                </div>
+              )}
+              <div style={{ marginTop: 16, background: "#111827", borderRadius: 12, padding: "16px 20px" }}>
+                <p style={{ color: "#94a3b8", fontSize: 12, marginBottom: 12, textAlign: "left" }}>
+                  Kérjük válassza ki az Ön számára fontos témaköröket, hogy meglássa a TISZA kormány összesített teljesítményét a többi országhoz képest. Az indikátorok kiválasztása után az első táblázatban megjelenik az országok elért helyezése (1 = legjobb relatív teljesítmény). A "Részletek" gombra kattintva láthatóvá válnak az egyes indikátorok szerinti helyezések is, ahol zölddel jelöltük azokat, ahol a magasabb érték jobb teljesítményt jelent, pirossal pedig azokat, ahol az alacsonyabb érték számít jobbnak (adatok forrása EUROSTAT).
+                </p>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {GROUPS.map(g => {
+                    const active = selectedGroups.has(g.key);
+                    const ds = DATASETS.find(d => d.id === g.key);
+                    return (
+                      <button key={g.key} onClick={() => {
+                        setSelectedGroups(prev => {
+                          const next = new Set(prev);
+                          const wasActive = next.has(g.key);
+                          wasActive ? next.delete(g.key) : next.add(g.key);
+                          if (!wasActive && typeof gtag !== 'undefined') {
+                            gtag('event', 'indikator_kivalasztva', {
+                              event_category: 'Indikátor',
+                              event_label: g.label,
+                              value: 1
+                            });
+                          }
+                          return next;
+                        });
+                      }} style={{
+                        padding: "5px 12px", borderRadius: 20,
+                        border: "1px solid " + (active ? "transparent" : "#334155"),
+                        cursor: "pointer", fontSize: 11, fontWeight: 600, transition: "all 0.2s",
+                        background: active ? "#166534" : "#1e293b",
+                        color: active ? "#fff" : "#cbd5e1"
+                      }}>
+                        {g.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
+                  <button onClick={() => setSelectedGroups(new Set())}
+                    style={{ padding: "4px 12px", borderRadius: 20, border: "1px solid #475569", cursor: "pointer", fontSize: 10, background: "transparent", color: "#cbd5e1" }}>
+                    Törlés
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {selectedGroups.size === 0 ? (
+              <div style={{ textAlign: "center", padding: "60px 20px", color: "#475569", fontSize: 14 }}>
+                Válasszon legalább egy témakört a fenti listából az összehasonlítás megjelenítéséhez.
+              </div>
+            ) : (
+              <>
+                <div style={{ overflowX: showDetails ? "auto" : "visible", borderRadius: 10, boxShadow: "0 4px 40px rgba(0,0,0,0.5)" }}>
+                  <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 2, fontSize: 12 }}>
+                    <thead>
+                      <tr>
+                        <th style={{
+                          background: "#151f35", padding: "10px 14px", textAlign: "left",
+                          color: "#94a3b8", fontWeight: 600, fontSize: 10, letterSpacing: 1,
+                          textTransform: "uppercase", borderRadius: 6,
+                          position: "sticky", left: 0, zIndex: 10, minWidth: 145
+                        }}>Ország</th>
+                        <th style={{
+                          background: "#1c1a0e", padding: "10px 10px", textAlign: "center",
+                          color: "#fbbf24", fontWeight: 700, fontSize: 10, letterSpacing: 1,
+                          textTransform: "uppercase", borderRadius: 6, minWidth: 80
+                        }}>Átlag helyezés</th>
+                        {showDetails && visibleDatasets.map(ds => (
+                          <th key={ds.id} style={{
+                            background: "#151f35", padding: "6px 4px", textAlign: "center",
+                            color: loading[ds.id] ? "#60a5fa" : errors[ds.id] ? "#f87171" : "#94a3b8",
+                            fontWeight: "normal", fontSize: 10, borderRadius: 6, minWidth: 72, lineHeight: 1.35
+                          }}>
+                            {ds.label}
+                            <div style={{ fontSize: 9, color: ds.goodDirection === 1 ? "#34d399" : "#f87171", marginTop: 1 }}>
+                              {ds.goodDirection === 1 ? "▲ jobb" : "▼ jobb"}
+                            </div>
+                            {loading[ds.id] && <div style={{ color: "#3b82f6", fontSize: 8 }}>tölt…</div>}
+                            {errors[ds.id] && <div style={{ color: "#ef4444", fontSize: 8 }}>hiba</div>}
+                          </th>
+                        ))}
+                        <th style={{
+                          background: "#151f35", padding: "6px 8px", textAlign: "center",
+                          borderRadius: 6, minWidth: 40
+                        }}>
+                          <button onClick={() => setShowDetails(v => !v)} style={{
+                            background: "#1e293b", border: "1px solid #334155", borderRadius: 6,
+                            color: "#94a3b8", cursor: "pointer", fontSize: 10, padding: "3px 8px",
+                            whiteSpace: "nowrap"
+                          }}>
+                            {showDetails ? "◀ Összecsuk" : "▶ Részletek"}
+                          </button>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sorted.map((country, i) => {
+                        const avg = avgRanks[country];
+                        return (
+                          <tr key={country}>
+                            <td style={{
+                              background: "#151f35", padding: "7px 14px", fontWeight: 600,
+                              color: "#f1f5f9", borderRadius: 6,
+                              position: "sticky", left: 0, zIndex: 5, whiteSpace: "nowrap"
+                            }}>
+                              <span style={{ color: "#374151", marginRight: 6, fontSize: 10 }}>{i + 1}.</span>
+                              {COUNTRY_NAMES[country]}
+                              <span style={{ color: "#334155", marginLeft: 4, fontSize: 9 }}>({country})</span>
+                            </td>
+                            <td style={{
+                              background: avg != null ? getRankColor(avg) : "#111827",
+                              padding: "7px 10px", textAlign: "center", borderRadius: 5,
+                              fontWeight: 700, fontSize: 14, color: "rgba(255,255,255,0.95)"
+                            }}>
+                              {avg != null ? avg.toFixed(1) : "—"}
+                            </td>
+                            {showDetails && visibleDatasets.map(ds => {
+                              const rank = results[ds.id]?.[country];
+                              const isLoading = loading[ds.id];
+                              return (
+                                <td key={ds.id} style={{
+                                  background: rank != null ? getRankColor(rank) : "#111827",
+                                  padding: "6px 4px", textAlign: "center", borderRadius: 5,
+                                  fontWeight: 700, fontSize: 13,
+                                  color: "rgba(255,255,255,0.93)",
+                                  transition: "background 0.5s"
+                                }}>
+                                  {isLoading
+                                    ? <span style={{ color: "#1e3a5f" }}>·</span>
+                                    : errors[ds.id]
+                                      ? <span style={{ color: "#7f1d1d", fontSize: 10 }}>—</span>
+                                      : rank ?? <span style={{ color: "#1e3a5f" }}>—</span>}
+                                </td>
+                              );
+                            })}
+                            <td style={{ background: "#151f35", borderRadius: 5 }}></td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div style={{ marginTop: 16, display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center", justifyContent: "center" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
+                    {[1,2,3,4,5,6,7,8,9,10,11].map(r => (
+                      <div key={r} style={{
+                        width: 22, height: 22, borderRadius: 4, background: getRankColor(r),
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        fontSize: 10, fontWeight: 700, color: "white"
+                      }}>{r}</div>
+                    ))}
+                  </div>
+                  <div style={{ color: "#475569", fontSize: 10, maxWidth: 500 }}>
+                    <span style={{ color: "#34d399" }}>▲ jobb</span>: növekedés a cél (jövedelem, élettartam, foglalkoztatás, termékenység, K+F, házt. vagyon, külföldi tőke)&nbsp;&nbsp;
+                    <span style={{ color: "#f87171" }}>▼ jobb</span>: csökkenés a cél (adósság, infláció, egyenlőtlenség, bűnözés, üvegházgáz, lakásár, kamat, szegénység, öngyilkosság, császármetszés)
+                  </div>
+                </div>
+
+                {firstTime && lastTime && (
+                  <div style={{ marginTop: 32 }}>
+                    <div style={{ marginBottom: 10, textAlign: "center" }}>
+                      <span style={{ color: "#94a3b8", fontSize: 11, textTransform: "uppercase", letterSpacing: 1 }}>
+                        Abszolút helyzet
+                      </span>
+                      <span style={{ color: "#475569", fontSize: 10, marginLeft: 8 }}>
+                        {singleDs ? "– nyers értékek" : "– átlagos helyezés a kiindulási és záró évben"}
+                      </span>
+                    </div>
+                    <div style={{ overflowX: "auto", borderRadius: 10, boxShadow: "0 4px 40px rgba(0,0,0,0.5)" }}>
+                      <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 2, fontSize: 12 }}>
+                        <thead>
+                          <tr>
+                            <th style={{
+                              background: "#151f35", padding: "10px 14px", textAlign: "left",
+                              color: "#94a3b8", fontWeight: 600, fontSize: 10, letterSpacing: 1,
+                              textTransform: "uppercase", borderRadius: 6,
+                              position: "sticky", left: 0, zIndex: 10, minWidth: 145
+                            }}>Ország</th>
+                            <th onClick={() => setSortByCol('first')} style={{
+                              background: sortByCol === 'first' ? "#2d2500" : "#1c1a0e",
+                              padding: "10px 10px", textAlign: "center",
+                              color: sortByCol === 'first' ? "#fde68a" : "#fbbf24",
+                              fontWeight: 700, fontSize: 10, letterSpacing: 1,
+                              textTransform: "uppercase", borderRadius: 6, minWidth: 100,
+                              cursor: "pointer", userSelect: "none",
+                              border: sortByCol === 'first' ? "1px solid #fbbf24" : "1px solid transparent"
+                            }}>
+                              {singleDs ? firstTime : firstTime?.replace(/-Q\d$/, "").substring(0, 4)}{sortByCol === 'first' ? " ▲" : ""}
+                            </th>
+                            <th onClick={() => setSortByCol('last')} style={{
+                              background: sortByCol === 'last' ? "#2d2500" : "#1c1a0e",
+                              padding: "10px 10px", textAlign: "center",
+                              color: sortByCol === 'last' ? "#fde68a" : "#fbbf24",
+                              fontWeight: 700, fontSize: 10, letterSpacing: 1,
+                              textTransform: "uppercase", borderRadius: 6, minWidth: 100,
+                              cursor: "pointer", userSelect: "none",
+                              border: sortByCol === 'last' ? "1px solid #fbbf24" : "1px solid transparent"
+                            }}>
+                              {singleDs ? lastTime : lastTime?.replace(/-Q\d$/, "").substring(0, 4)}{sortByCol === 'last' ? " ▲" : ""}
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {sortedByLast.map((country, i) => {
+                            const fVal = singleDs ? firstRawVals[country] : firstAvgRanks[country];
+                            const lVal = singleDs ? lastRawVals[country] : lastAvgRanks[country];
+                            const fColor = singleDs ? (() => {
+                              const vals = COUNTRIES.map(c => firstRawVals[c]).filter(v => v != null).sort((a,b) => singleDs.goodDirection === 1 ? b-a : a-b);
+                              const rank = vals.indexOf(fVal) + 1;
+                              return rank > 0 ? getRankColor(rank) : "#111827";
+                            })() : (fVal != null ? getRankColor(fVal) : "#111827");
+                            const lColor = singleDs ? (() => {
+                              const vals = COUNTRIES.map(c => lastRawVals[c]).filter(v => v != null).sort((a,b) => singleDs.goodDirection === 1 ? b-a : a-b);
+                              const rank = vals.indexOf(lVal) + 1;
+                              return rank > 0 ? getRankColor(rank) : "#111827";
+                            })() : (lVal != null ? getRankColor(lVal) : "#111827");
+                            return (
+                              <tr key={country}>
+                                <td style={{
+                                  background: "#151f35", padding: "7px 14px", fontWeight: 600,
+                                  color: "#f1f5f9", borderRadius: 6,
+                                  position: "sticky", left: 0, zIndex: 5, whiteSpace: "nowrap"
+                                }}>
+                                  <span style={{ color: "#374151", marginRight: 6, fontSize: 10 }}>{i + 1}.</span>
+                                  {COUNTRY_NAMES[country]}
+                                  <span style={{ color: "#334155", marginLeft: 4, fontSize: 9 }}>({country})</span>
+                                </td>
+                                <td style={{
+                                  background: fColor, padding: "7px 10px", textAlign: "center",
+                                  borderRadius: 5, fontWeight: 700, fontSize: singleDs ? 11 : 14,
+                                  color: "rgba(255,255,255,0.95)"
+                                }}>
+                                  {fVal != null ? (singleDs ? fVal.toLocaleString("hu-HU", { maximumFractionDigits: 2 }) : fVal.toFixed(1)) : "—"}
+                                </td>
+                                <td style={{
+                                  background: lColor, padding: "7px 10px", textAlign: "center",
+                                  borderRadius: 5, fontWeight: 700, fontSize: singleDs ? 11 : 14,
+                                  color: "rgba(255,255,255,0.95)"
+                                }}>
+                                  {lVal != null ? (singleDs ? lVal.toLocaleString("hu-HU", { maximumFractionDigits: 2 }) : lVal.toFixed(1)) : "—"}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+          </div>
+        </div>
+      );
+    }
+
+    // ── Megosztás gombsor ────────────────────────────────────────────────────
+    function ShareButtons() {
+      const url = encodeURIComponent(window.location.href);
+      const title = encodeURIComponent("A TISZA kormány teljesítménye 2026-2030 között a kelet-közép-európai országok viszonylatában");
+
+      const buttons = [
+        {
+          label: "Facebook",
+          color: "#1877f2",
+          icon: "f",
+          href: `https://www.facebook.com/sharer/sharer.php?u=${url}`
+        },
+        {
+          label: "X",
+          color: "#000000",
+          icon: "𝕏",
+          href: `https://twitter.com/intent/tweet?url=${url}&text=${title}`
+        },
+        {
+          label: "WhatsApp",
+          color: "#25d366",
+          icon: "W",
+          href: `https://wa.me/?text=${title}%20${url}`
+        },
+        {
+          label: "LinkedIn",
+          color: "#0a66c2",
+          icon: "in",
+          href: `https://www.linkedin.com/sharing/share-offsite/?url=${url}`
+        },
+        {
+          label: "Email",
+          color: "#475569",
+          icon: "✉",
+          href: `mailto:?subject=${title}&body=${url}`
+        },
+      ];
+
+      return (
+        <div style={{ borderTop: "1px solid #1e293b", background: "#0d1626", padding: "24px 16px 8px" }}>
+          <div style={{ maxWidth: 560, margin: "0 auto", textAlign: "center" }}>
+            <span style={{ color: "#94a3b8", fontSize: 12, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>
+              Megosztás
+            </span>
+            <div style={{ display: "flex", justifyContent: "center", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+              {buttons.map(btn => (
+                <a key={btn.label} href={btn.href} target="_blank" rel="noopener noreferrer"
+                  style={{
+                    display: "inline-flex", alignItems: "center", gap: 6,
+                    background: btn.color, color: "#fff",
+                    padding: "7px 14px", borderRadius: 20,
+                    fontSize: 12, fontWeight: 700, textDecoration: "none",
+                    transition: "opacity 0.2s", opacity: 1
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.opacity = "0.8"}
+                  onMouseLeave={e => e.currentTarget.style.opacity = "1"}
+                >
+                  <span style={{ fontSize: 13 }}>{btn.icon}</span> {btn.label}
+                </a>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ── Visszajelző Footer ───────────────────────────────────────────────────
+    const EMAILJS_SERVICE_ID  = "service_rmziako";
+    const EMAILJS_TEMPLATE_ID = "template_zbtawgl";
+    const EMAILJS_PUBLIC_KEY  = "J85CBAuCWfiwlloG7";
+    emailjs.init({ publicKey: EMAILJS_PUBLIC_KEY });
+
+    function FeedbackFooter() {
+      const [name, setName] = React.useState("");
+      const [email, setEmail] = React.useState("");
+      const isValidEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v.trim());
+      const [message, setMessage] = React.useState("");
+      const [status, setStatus] = React.useState(null);
+
+      const send = async () => {
+        if (!message.trim() || !isValidEmail(email)) return;
+        setStatus("sending");
+        try {
+          await emailjs.send(
+            EMAILJS_SERVICE_ID,
+            EMAILJS_TEMPLATE_ID,
+            { from_name: name.trim() || "Névtelen", name: name.trim() || "Névtelen", reply_to: email.trim(), email: email.trim(), message: message.trim(), to_email: "gydeak@gmail.com", title: "Visszajelzés" },
+            EMAILJS_PUBLIC_KEY
+          );
+          setStatus("ok");
+          setName(""); setEmail(""); setMessage("");
+          setTimeout(() => setStatus(null), 3000);
+        } catch(e) {
+          setStatus("err");
+        }
+      };
+
+      const inputStyle = {
+        background: "#0b1426", border: "1px solid #1e3a5f", borderRadius: 8,
+        color: "#e2e8f0", fontSize: 13, padding: "9px 12px", outline: "none",
+        fontFamily: "'Segoe UI', sans-serif", resize: "none", width: "100%"
+      };
+
+      return (
+        <div style={{
+          borderTop: "1px solid #1e293b", marginTop: 48,
+          background: "#0d1626", padding: "32px 16px 40px"
+        }}>
+          <div style={{ maxWidth: 560, margin: "0 auto", display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{ textAlign: "center", marginBottom: 4 }}>
+              <span style={{ color: "#94a3b8", fontSize: 12, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>
+                Visszajelzés
+              </span>
+              <p style={{ color: "#475569", fontSize: 11, marginTop: 4 }}>
+                Hibát találtál vagy fejlesztési ötleted van? Írj nekünk!
+              </p>
+            </div>
+            <input
+              placeholder="Neved (nem kötelező)"
+              value={name} onChange={e => setName(e.target.value)}
+              style={{ ...inputStyle, height: 38 }}
+            />
+            <input
+              type="email"
+              placeholder="E-mail címed (kötelező)"
+              value={email} onChange={e => setEmail(e.target.value)}
+              style={{ ...inputStyle, height: 38, borderColor: email.trim() ? (isValidEmail(email) ? "#166534" : "#991b1b") : "#4b1c1c" }}
+            />
+            <textarea
+              placeholder="Írd le a hibát vagy fejlesztési ötletet..."
+              rows={4} value={message} onChange={e => setMessage(e.target.value)}
+              style={inputStyle}
+            />
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <button
+                onClick={send}
+                disabled={status === "sending" || !message.trim() || !isValidEmail(email)}
+                style={{
+                  background: (status === "sending" || !message.trim() || !isValidEmail(email)) ? "#1e293b" : "#166534",
+                  color: (status === "sending" || !message.trim() || !isValidEmail(email)) ? "#475569" : "#fff",
+                  border: "none", borderRadius: 8, padding: "10px 24px",
+                  fontSize: 13, fontWeight: 700,
+                  cursor: (status === "sending" || !message.trim() || !isValidEmail(email)) ? "default" : "pointer",
+                  transition: "background 0.2s", whiteSpace: "nowrap"
+                }}
+              >
+                {status === "sending" ? "Küldés…" : "Elküldöm"}
+              </button>
+              {status === "ok"  && <span style={{ color: "#34d399", fontSize: 12 }}>✓ Üzenet elküldve, köszönjük!</span>}
+              {status === "err" && <span style={{ color: "#f87171", fontSize: 12 }}>Hiba történt, próbáld újra.</span>}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function Root() {
+      return (
+        <>
+          <App />
+          <ShareButtons />
+          <FeedbackFooter />
+        </>
+      );
+    }
+    
+    ReactDOM.createRoot(document.getElementById("root")).render(<Root />);
+  </script>
+</body>
+</html>
