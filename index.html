@@ -56,7 +56,9 @@
         from: "2025-Q3", to: "2030-Q2",
         rollingAvg4Q: true, rollingFrom: "2026-Q2" },
       { id: "env_ac_aigg_q",  label: "Üvegházhatású gáz",          method: "ratio", goodDirection: -1, params: { freq: "Q", s_adj: "SA", nace_r2: "TOTAL_HH", airpol: "GHG", unit: "T_HAB" },                    from: "2026-Q2", to: "2030-Q2" },
-      { id: "demo_find",      label: "Termékenység",         method: "ratio", goodDirection: +1, params: { freq: "A", indic_de: "TOTFERRT" },                                                               from: "2026",    to: "2030"    },
+      { id: "demo_find",      label: "Termékenység",         method: "ratio", goodDirection: +1, params: null,
+        source: "csv", csvUrl: "https://raw.githubusercontent.com/gydeak/TFRvisualization/refs/heads/main/monthly_tfr_by_cohort_with_ma.csv", csvColumn: "tfr_ma_13",
+        csvFirst: "2026-07", csvLast: null, from: "2026-07", to: "2030-12" },
       { id: "demo_fabortind",      label: "Abortuszok",         method: "ratio", goodDirection: -1, params: { freq: "A", indic_de: "ABRATIO", unit: "RT" },                                                               from: "2026",    to: "2030"    },
       { id: "lfsi_emp_q",     label: "Foglalkoztatás",       method: "ratio", goodDirection: +1, params: { freq: "Q", indic_em: "ACT", s_adj: "NSA", sex: "T", age: "Y15-74", unit: "PC_POP" },            from: "2026-Q2", to: "2030-Q2" },
       { id: "gov_10q_ggdebt", label: "Államadósság",         method: "ratio", goodDirection: -1, params: { freq: "Q", na_item: "GD", sector: "S13", unit: "PC_GDP" },                                      from: "2026-Q2", to: "2030-Q2" },
@@ -138,6 +140,34 @@
         from: "2025-Q3", to: "2030-Q2",
         rollingAvg4Q: true, rollingFrom: "2026-Q2" },
     ];
+
+    // TFR: 13 havi középre igazított mozgóátlag (tfr_ma_13) a gydeak/TFRvisualization CSV-ből.
+    // Havi kulcs: "YYYY-MM". Az első időpont (csvFirst) rögzített bázis: a 2026-07-es érték a
+    // 2026.01–2027.01 közötti születéseket fedi, amelyekről a szülők a választás (április) előtt
+    // döntöttek. A döntéstől a születésig ~10 hónap telik el (9 hónap terhesség + átlagosan ~1 hónap
+    // a fogantatásig), ezért a választás utáni döntések hatása először a 2027-02-i születéseknél,
+    // vagyis a 2026-08-i 13 havi átlagban jelenhet meg.
+    async function fetchCsvTfr(ds) {
+      const resp = await fetch(ds.csvUrl);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const lines = (await resp.text()).split(/\r?\n/);
+      const head = lines[0].split(",");
+      const iGeo = head.indexOf("geo"), iDate = head.indexOf("date"), iVal = head.indexOf(ds.csvColumn);
+      if (iGeo < 0 || iDate < 0 || iVal < 0) throw new Error("Hiányzó CSV oszlop");
+      const result = {};
+      for (let i = 1; i < lines.length; i++) {
+        if (!lines[i]) continue;
+        const cols = lines[i].split(",");
+        const geo = cols[iGeo];
+        if (!COUNTRIES.includes(geo)) continue;
+        const t = cols[iDate].substring(0, 7);
+        if (t < ds.csvFirst || (ds.csvLast && t > ds.csvLast)) continue;
+        const v = parseFloat(cols[iVal]);
+        if (isNaN(v)) continue;
+        (result[geo] = result[geo] || {})[t] = v;
+      }
+      return result;
+    }
 
     async function fetchDataset(ds) {
       const geoParams = COUNTRIES.map(c => `geo=${c}`).join("&");
@@ -314,7 +344,7 @@
       return result;
     }
 
-    function computeAllScores(parsedByCountry, method, goodDirection) {
+    function computeAllScores(parsedByCountry, method, goodDirection, ds) {
       const allTimes = new Set();
       for (const c of COUNTRIES) {
         if (parsedByCountry[c]) Object.keys(parsedByCountry[c]).forEach(t => allTimes.add(t));
@@ -325,6 +355,12 @@
       if (commonTimes.length < 2) return {};
       const firstTime = commonTimes[0];
       const lastTime  = commonTimes[commonTimes.length - 1];
+      // CSV-alapú mutató: a bázis (és ha meg van adva, a záró hónap) rögzített, mind a 11 országnál kell
+      if (ds && ds.source === "csv") {
+        if (firstTime !== ds.csvFirst) return {};
+        if (ds.csvLast && lastTime !== ds.csvLast) return {};
+        if (lastTime <= firstTime) return {};
+      }
       const firstVals = COUNTRIES.map(c => parsedByCountry[c][firstTime]);
       const lastVals  = COUNTRIES.map(c => parsedByCountry[c][lastTime]);
       const firstAvg = firstVals.reduce((a, b) => a + b, 0) / firstVals.length;
@@ -419,18 +455,20 @@
               }
             } else if (ds.useTsv) {
               parsed = await fetchAndParseTsv(ds);
+            } else if (ds.source === "csv") {
+              parsed = await fetchCsvTfr(ds);
             } else {
               const data = await fetchDataset(ds);
               parsed = parseEurostatJSON(data);
             }
             parsedCache[ds.id] = parsed;
             const countryCount = COUNTRIES.filter(c => parsed[c] && Object.keys(parsed[c]).length > 0).length;
-            if (countryCount === 0) throw new Error("Üres válasz");
+            if (countryCount === 0) throw new Error(ds.source === "csv" ? `Még nincs elérhető adat: a ${ds.csvLast || ds.csvFirst} 13 havi középre igazított átlag csak a későbbi havi adatok megjelenése után számítható` : "Üres válasz");
             // Gördülő 4 negyedéves átlag alkalmazása, ha szükséges
             const scoreData = ds.rollingAvg4Q
               ? applyRollingAvg4Q(parsed, ds.rollingFrom)
               : parsed;
-            const scores = computeAllScores(scoreData, ds.method, ds.goodDirection);
+            const scores = computeAllScores(scoreData, ds.method, ds.goodDirection, ds);
             setResults(prev => ({ ...prev, [ds.id]: rankCountries(scores) }));
             // rawData-ba a simított változatot tároljuk (az abszolút táblához)
             setRawData(prev => ({ ...prev, [ds.id]: ds.rollingAvg4Q ? scoreData : parsed }));
@@ -467,6 +505,7 @@
         const intersection = dsCountryTimes.reduce((a, b) => new Set([...a].filter(x => b.has(x))));
         if (intersection.size === 0) return { first: null, last: null };
         const sorted = [...intersection].sort();
+        if (ds.source === "csv" && (sorted[0] !== ds.csvFirst || (ds.csvLast && sorted[sorted.length - 1] !== ds.csvLast))) return { first: null, last: null };
         return { first: sorted[0], last: sorted[sorted.length - 1] };
       };
 
