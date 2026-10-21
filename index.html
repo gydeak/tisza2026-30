@@ -49,7 +49,11 @@
     const DATASETS = [
       { id: "demo_mlexpec",   label: "Várható élettartam",  method: "diff",  goodDirection: +1, params: { freq: "A", unit: "YR", sex: "T", age: "Y_LT1" },                                               from: "2026",    to: "2030"    },
       { id: "ilc_di03",       label: "Mediánjövedelem",     method: "ratio", goodDirection: +1, params: { freq: "A", age: "TOTAL", sex: "T", indic_il: "MED_E", unit: "PPS" },                             from: "2026",    to: "2030"    },
-      { id: "nama_10_gdp",       label: "Munkajövedelem",     method: "ratio", goodDirection: +1, params: { freq: "A", unit: "PC_GDP", na_item: "D1" },                             from: "2026",    to: "2030"    },
+      // Munkajövedelem: negyedéves bérjövedelem (D1) a GDP százalékában (NSA), gördülő 4Q átlaggal.
+      { id: "namq_10_gdp", label: "Munkajövedelem", method: "ratio", goodDirection: +1,
+        params: { freq: "Q", unit: "PC_GDP", s_adj: "NSA", na_item: "D1" },
+        from: "2025-Q3", to: "2030-Q2",
+        rollingAvg4Q: true, rollingFrom: "2026-Q2" },
       // GDP: negyedéves volumenindex (2020=100, NSA), gördülő 4Q átlag — logikailag azonos az inflációs indexszel
       { id: "namq_10_pc", label: "GDP", method: "ratio", goodDirection: +1,
         params: { freq: "Q", unit: "CLV_I20_HAB", s_adj: "NSA", na_item: "B1GQ" },
