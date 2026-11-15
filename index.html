@@ -64,7 +64,7 @@
         source: "csv", csvUrl: "https://raw.githubusercontent.com/gydeak/TFRvisualization/refs/heads/main/monthly_tfr_by_cohort_with_ma.csv", csvColumn: "tfr_ma_13",
         csvFirst: "2026-07", csvLast: null, from: "2026-07", to: "2030-12" },
       { id: "demo_fabortind",      label: "Abortuszok",         method: "ratio", goodDirection: -1, params: { freq: "A", indic_de: "ABRATIO", unit: "RT" },                                                               from: "2026",    to: "2030"    },
-      { id: "lfsi_emp_q",     label: "Foglalkoztatás",       method: "ratio", goodDirection: +1, params: { freq: "Q", indic_em: "ACT", s_adj: "NSA", sex: "T", age: "Y15-74", unit: "PC_POP" },            from: "2026-Q2", to: "2030-Q2" },
+      { id: "lfsq_ergan",     label: "Foglalkoztatás",       method: "ratio", goodDirection: +1, params: { freq: "Q", unit: "PC", sex: "T", age: "Y15-74", citizen: "TOTAL" },            from: "2026-Q2", to: "2030-Q2" },
       { id: "gov_10q_ggdebt", label: "Államadósság",         method: "ratio", goodDirection: -1, params: { freq: "Q", na_item: "GD", sector: "S13", unit: "PC_GDP" },                                      from: "2026-Q2", to: "2030-Q2" },
       { id: "gov_10dd_edpt1", label: "Kamatfizetés",         method: "diff",  goodDirection: -1, params: { freq: "A", unit: "PC_GDP", sector: "S13", na_item: "D41PAY" },                                  from: "2026",    to: "2030"    },
       { id: "ilc_di12",       label: "Jövedelmi egyenlőség",                 method: "ratio", goodDirection: -1, params: { freq: "A", age: "TOTAL", statinfo: "GINI_HND" },                                                from: "2026",    to: "2030"    },
