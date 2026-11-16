@@ -486,6 +486,14 @@
 
       useEffect(() => { loadAll(); }, [loadAll]);
 
+      // Egy indikátor akkor használható, ha mind a 11 országból van legalább két közös időpont
+      // (ugyanez a feltétele a helyezések számításának: computeAllScores → commonTimes.length >= 2).
+      // Ilyenkor minden országhoz tartozik helyezés; a gombját világosabb háttérrel jelezzük.
+      const hasEnoughData = (id) => {
+        const r = results[id];
+        return !!r && COUNTRIES.every(c => r[c] != null);
+      };
+
       const loadedCount = DATASETS.filter(ds => results[ds.id] || errors[ds.id]).length;
       const allDone = loadedCount === DATASETS.length;
 
@@ -597,12 +605,21 @@
                 <p style={{ color: "#94a3b8", fontSize: 12, marginBottom: 12, textAlign: "left" }}>
                   Kérjük válassza ki az Ön számára fontos témaköröket, hogy meglássa a TISZA kormány összesített teljesítményét a többi országhoz képest. Az indikátorok kiválasztása után az első táblázatban megjelenik az országok elért helyezése (1 = legjobb relatív teljesítmény). A "Részletek" gombra kattintva láthatóvá válnak az egyes indikátorok szerinti helyezések is, ahol zölddel jelöltük azokat, ahol a magasabb érték jobb teljesítményt jelent, pirossal pedig azokat, ahol az alacsonyabb érték számít jobbnak (adatok forrása EUROSTAT).
                 </p>
+                <p style={{ color: "#94a3b8", fontSize: 12, marginBottom: 10, textAlign: "left" }}>
+                  {allDone
+                    ? "A világosabb gombok indikátoraihoz mind a 11 országból van elég adat az összehasonlításhoz; a sötétebbeknél még nincs."
+                    : "Az adatok betöltése folyamatban: a világosabb gombok indikátoraihoz már van elég adat az összehasonlításhoz."}
+                </p>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                   {GROUPS.map(g => {
                     const active = selectedGroups.has(g.key);
                     const ds = DATASETS.find(d => d.id === g.key);
+                    const available = hasEnoughData(g.key);
+                    const pending = !results[g.key] && !errors[g.key];
                     return (
-                      <button key={g.key} onClick={() => {
+                      <button key={g.key}
+                        title={available ? "Van elég adat az összehasonlításhoz" : pending ? "Betöltés…" : "Még nincs elég adat az összehasonlításhoz"}
+                        onClick={() => {
                         setSelectedGroups(prev => {
                           const next = new Set(prev);
                           const wasActive = next.has(g.key);
@@ -618,10 +635,10 @@
                         });
                       }} style={{
                         padding: "5px 12px", borderRadius: 20,
-                        border: "1px solid " + (active ? "transparent" : "#334155"),
+                        border: "1px solid " + (active ? "transparent" : available ? "#94a3b8" : "#334155"),
                         cursor: "pointer", fontSize: 11, fontWeight: 600, transition: "all 0.2s",
-                        background: active ? "#166534" : "#1e293b",
-                        color: active ? "#fff" : "#cbd5e1"
+                        background: active ? "#166534" : available ? "#475569" : "#1e293b",
+                        color: active ? "#fff" : available ? "#f8fafc" : "#64748b"
                       }}>
                         {g.label}
                       </button>
